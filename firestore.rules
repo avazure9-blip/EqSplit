@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('^[a-z0-9]+-[0-9]+@eqsplit[.]local$');
+    }
+    function localPart() { return request.auth.token.email.split('@')[0]; }
+    function pid() { return localPart().split('-')[0]; }
+    function ver() { return int(localPart().split('-')[1]); }
+    function isUser() {
+      return signedIn()
+        && get(/databases/$(database)/documents/people/$(pid())).data.loginVersion == ver();
+    }
+    function adminId() { return get(/databases/$(database)/documents/config/admin).data.personId; }
+    function isAdmin() { return isUser() && adminId() == pid(); }
+    function inGroup(groupId) {
+      return isUser()
+        && pid() in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
+    }
+
+    match /config/admin {
+      allow get: if true;
+      allow create: if signedIn() && ver() == 0 && request.resource.data.personId == pid();
+    }
+
+    match /people/{personId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        || (signedIn() && pid() == personId && ver() == 0
+            && getAfter(/databases/$(database)/documents/config/admin).data.personId == personId
+            && request.resource.data.loginVersion == 0);
+      allow update: if isAdmin()
+        || (isUser() && pid() == personId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['joined', 'updatedAt']));
+    }
+
+    match /joinCodes/{code} {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    match /groups/{groupId} {
+      allow read: if isAdmin() || (isUser() && pid() in resource.data.memberIds);
+      allow write: if isAdmin();
+
+      match /{collection}/{docId} {
+        allow read, write: if isAdmin() || inGroup(groupId);
+      }
+    }
+  }
+}
