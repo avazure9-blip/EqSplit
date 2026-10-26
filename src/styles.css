@@ -1100,10 +1100,9 @@ button.row:active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 32px 16px;
-  background: linear-gradient(180deg, var(--brand) 0, var(--brand) 240px, var(--bg) 240px);
+  gap: 28px;
+  padding: calc(48px + env(safe-area-inset-top)) 16px 32px;
+  background: linear-gradient(180deg, var(--brand) 0, var(--brand) 280px, var(--bg) 280px);
 }
 .signin-brand {
   display: flex;
